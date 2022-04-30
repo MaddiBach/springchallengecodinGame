@@ -10,10 +10,19 @@ function getRandomArbitrary(min, max) {
 function log(myHeroes) {
     let i = 0;
     while (i <= 2){
-        if (myHeroes[i].target == undefined) {
-            myHeroes[i].set_target(defaultpos[i]);
+        if (myHeroes[i].action == 'MOVE') {
+            if (myHeroes[i].route == undefined) {
+                myHeroes[i].route = defaultpos[i];
+            }
+            myHeroes[i].move();
         }
-        myHeroes[i].move();
+        if (myHeroes[i].action == 'WIND') {
+            myHeroes[i].windspell(enemybase.pos);
+            myHeroes[i].action = 'MOVE';
+        }
+        if (myHeroes[i].action == 'CONTROL') {
+            
+        }
         i++;
     }
 }
@@ -27,10 +36,11 @@ function attack_closest(index) {
     if (farBadguy != undefined)
     {
         myHeroes[index].set_closestmonster(theMonsters);
-        myHeroes[index].set_target(myHeroes[index].closestmonster.pos);
+        myHeroes[index].route = myHeroes[index].closestmonster.pos;
     }
     else {
         myHeroes[index].target = undefined;
+        myHeroes[index].route = undefined;
     }
 }
 
@@ -54,13 +64,25 @@ function attack_most_threatening(index) {
         let closebadguy = theMonsters.find(monster => monster.DistancetoBase < 5000);
         if (closebadguy != undefined) {
             let mytarget = get_closest_monster(mybase.pos, theMonsters);
-            myHeroes[index].set_target(mytarget.pos);
+            myHeroes[index].target = mytarget;
+            myHeroes[index].route = myHeroes[index].target.pos;
         }
-        else
+        else {
             myHeroes[index].target = undefined;
+            myHeroes[index].route = undefined;
+        }
     }
 }
 
+function nextcontroltarget(myhero ,theMonsters) {
+    for (i in theMonsters) {
+        if (theMonsters[i].beenControlled != 1 && theMonsters[i].DistancetoBase > 5000 && get_distance(myhero.pos, theMonsters[i].pos) < 500) {
+            theMonsters[i].beenControlled = 1;
+            return theMonsters[i];
+        }
+    }
+    return undefined;
+}
 /****************************/
 /*	CLASS					*/
 /****************************/
@@ -122,13 +144,13 @@ class Entity {
 
     }
     move() {
-        console.log('MOVE ' + this.target[0] + ' ' + this.target[1]);
+        console.log('MOVE ' + this.route[0] + ' ' + this.route[1]);
     }
     windspell(target) {
         console.log('SPELL WIND ' + target[0] + ' ' + target[1]);
     }
     controlspell(direction) {
-        console.log('CONTROL ' + this.controltarget.id + ' ' + direction[0] + ' ' + direction[1]);
+        console.log('SPELL CONTROL ' + this.controltarget.id + ' ' + direction[0] + ' ' + direction[1]);
     }
 }
 
@@ -148,9 +170,10 @@ class Hero extends Entity {
         this.id = undefined;
         this.pos = undefined;
         this.isControlled = undefined;
-        // this.route = undefined;
+        this.route = undefined;
+        this.action = 'MOVE';
         // this.nearbyspiders = undefined;
-        this.target = undefined;
+        this.target = new Monster();
         this.closestmonster = undefined;
         this.controltarget = undefined;
         this.shieldLife = undefined;
@@ -170,6 +193,7 @@ class Monster extends Entity {
         this.DistancetoBase = undefined;
         this.nearbyspiders = undefined;
         this.isControlled = undefined;
+        this.beenControlled = 0;
         this.shieldLife = undefined;
     }
 }
@@ -191,7 +215,7 @@ theMonsters = [];
 enemybase = new base();
 if (baseX == 0) {
     enemybase.set_pos(17630, 9000);
-    defaultpos = [[5000, 1228],[800, 800],[2500, 4300]];
+    defaultpos = [[3500, 5900],[800, 800],[6800, 2000]];
 }
 else {
     enemybase.set_pos(0, 0);
@@ -250,37 +274,56 @@ function Parseentities() {
             newenemyHero.set_id(id);
             enemyHeroes.push(newenemyHero);
         }
-
     }
 }
+
+function in_windrange(myheropos, monsterpos) {
+    console.error(get_distance(myheropos, monsterpos));
+    if (get_distance(myheropos, monsterpos) < 1000) {
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
 
 // game loop
 while (true) {
     
     Parseentities();
-    farBadguy = theMonsters.find(element => element.threat == 1);
-    let tocontrol = theMonsters.find(element => element.threat == 1, element.DistancetoBase > 5000);
+    farBadguy = theMonsters.find(element => element.id != undefined);
+    let tocontrol;
+    
+    if (tocontrol != undefined)
     
     for (i in myHeroes) {
         if (i == 0) {
-            if (tocontrol != undefined && mybase.mana > 50) {
-                myHeroes[i].controltarget = tocontrol;
+            attack_closest(i);
+            if (myHeroes[i].closestmonster != undefined && mybase.mana > 10 && in_windrange(myHeroes[i].pos, myHeroes[i].closestmonster.pos)) {
+                myHeroes[i].action = 'WIND';
             }
             else {
-                myHeroes[i].controltarget = undefined;
+                myHeroes[i].action = 'MOVE';
             }
-            if (myHeroes[i].controltarget != undefined)
-            attack_closest(i);
         };
         if (i == 1) {
             attack_most_threatening(i);
         };
         if (i == 2) {
-            attack_most_threatening(i);
+            attack_closest(i);
+            if (myHeroes[i].closestmonster != undefined && mybase.mana > 10 && in_windrange(myHeroes[i].pos, myHeroes[i].closestmonster.pos)) {
+                myHeroes[i].action = 'WIND';
+            }
+            else {
+                myHeroes[i].action = 'MOVE';
+            }
         };
     }
     theMonsters.splice(0,theMonsters.length);
-    console.error(waves);
     log(myHeroes);
+    for (i in myHeroes) {
+        myHeroes[i].action = 'MOVE';
+    }
     waves++;
 }
